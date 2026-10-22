@@ -1,23 +1,22 @@
 const router = require('express').Router();
 const Video = require('../models/Video');
 const multer = require('multer');
-const cloudinary = require('cloudinary').v2;
-const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const path = require('path');
+const fs = require('fs');
 
-// Cloudinary Configuration
-cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET
-});
+// Uploads Folder စစ်ဆေးခြင်း
+const uploadDir = './uploads';
+if (!fs.existsSync(uploadDir)){
+    fs.mkdirSync(uploadDir);
+}
 
-// Multer Storage Configuration for Cloudinary
-const storage = new CloudinaryStorage({
-    cloudinary: cloudinary,
-    params: {
-        folder: 'streamvibe_uploads',
-        resource_type: 'auto',
-        allowed_formats: ['jpg', 'png', 'jpeg', 'mp4', 'webm']
+// Multer Disk Storage Configuration for VPS/Local
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, 'uploads/');
+    },
+    filename: (req, file, cb) => {
+        cb(null, Date.now() + path.extname(file.originalname));
     }
 });
 const upload = multer({ storage: storage });
@@ -76,26 +75,27 @@ router.get('/stats/admin', async (req, res) => {
     }
 });
 
-// Admin: Upload video to Cloudinary
+// Admin: Upload video to VPS Local Storage
 router.post('/', upload.fields([
     { name: 'thumbnail', maxCount: 1 },
     { name: 'video', maxCount: 1 }
 ]), async (req, res) => {
     try {
-        const { title, category, duration, channel } = req.body;
+        const { title, category, duration, channel, tags } = req.body;
         
-        // Cloudinary ကပေးတဲ့ Secure URL များကို ရယူခြင်း
-        const thumbnailUrl = req.files['thumbnail'] ? req.files['thumbnail'][0].path : '';
-        const videoUrl = req.files['video'] ? req.files['video'][0].path : '';
+        const hostUrl = req.protocol + '://' + req.get('host');
+        const thumbnailUrl = req.files['thumbnail'] ? `${hostUrl}/uploads/${req.files['thumbnail'][0].filename}` : '';
+        const videoUrl = req.files['video'] ? `${hostUrl}/uploads/${req.files['video'][0].filename}` : '';
 
         const newVideo = new Video({
             title,
-            channel: channel || "StreamVibe Official",
+            channel: channel || "X Monsters Official",
             views: "1 view • Just now",
             duration: duration || "0:30",
             thumbnailUrl,
             videoUrl,
-            category: category || "Tech",
+            category: category || "General",
+            tags: tags || "",
             likes: 0,
             comments: []
         });

@@ -1,0 +1,24 @@
+services:
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  backend:
+    build: 
+      context: ./streamvibe-backend   # သင့် backend folder အမည်နဲ့ အတိအကျ တိုက်ဆိုင်ပါစေ
+      dockerfile: Dockerfile
+    container_name: xmonsters-backend
+    ports:
+      - "5000:5000"
+    environment:
+      - MONGO_URI=mongodb://mongodb:27017/xmonsters
+      - PORT=5000
+    depends_on:
+      - mongodb
+
+volumes:
+  mongo_data:

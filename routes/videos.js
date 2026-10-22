@@ -1,22 +1,23 @@
 const router = require('express').Router();
 const Video = require('../models/Video');
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
+const cloudinary = require('cloudinary').v2;
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
-// Uploads Folder စစ်ဆေးပြီး မရှိရင် အလိုအလျောက် ဆောက်ပေးခြင်း
-const uploadDir = './uploads';
-if (!fs.existsSync(uploadDir)){
-    fs.mkdirSync(uploadDir);
-}
+// Cloudinary Configuration
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET
+});
 
-// Multer Storage Configuration
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, 'uploads/');
-    },
-    filename: (req, file, cb) => {
-        cb(null, Date.now() + path.extname(file.originalname));
+// Multer Storage Configuration for Cloudinary
+const storage = new CloudinaryStorage({
+    cloudinary: cloudinary,
+    params: {
+        folder: 'streamvibe_uploads',
+        resource_type: 'auto',
+        allowed_formats: ['jpg', 'png', 'jpeg', 'mp4', 'webm']
     }
 });
 const upload = multer({ storage: storage });
@@ -75,7 +76,7 @@ router.get('/stats/admin', async (req, res) => {
     }
 });
 
-// Admin: Upload video
+// Admin: Upload video to Cloudinary
 router.post('/', upload.fields([
     { name: 'thumbnail', maxCount: 1 },
     { name: 'video', maxCount: 1 }
@@ -83,8 +84,9 @@ router.post('/', upload.fields([
     try {
         const { title, category, duration, channel } = req.body;
         
-        const thumbnailUrl = req.files['thumbnail'] ? `http://localhost:5000/uploads/${req.files['thumbnail'][0].filename}` : '';
-        const videoUrl = req.files['video'] ? `http://localhost:5000/uploads/${req.files['video'][0].filename}` : '';
+        // Cloudinary ကပေးတဲ့ Secure URL များကို ရယူခြင်း
+        const thumbnailUrl = req.files['thumbnail'] ? req.files['thumbnail'][0].path : '';
+        const videoUrl = req.files['video'] ? req.files['video'][0].path : '';
 
         const newVideo = new Video({
             title,

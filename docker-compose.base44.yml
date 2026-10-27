@@ -1,0 +1,70 @@
+# Base44 sandbox/dev environment for this repo (backend-only Express + MongoDB API).
+#
+# Run from the repo root:
+#   docker compose -f docker-compose.base44.yml up -d --build
+#
+# Both services run from the cloned source, so edits to *.js are picked up by
+# `node --watch` without rebuilding an image. The repo's own docker-compose.yml
+# builds a production image (COPY . .) and pins MongoDB to mongodb://mongodb —
+# it is intentionally NOT used here.
+name: xmonsters
+
+services:
+  mongo:
+    image: mongo:7
+    restart: on-failure
+    environment:
+      - MONGO_INITDB_DATABASE=xmonsters
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok' | grep -q 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    labels:
+      base44.project: "MongoDB"
+      base44.kind: "infra"
+
+  api:
+    image: node:22-alpine
+    working_dir: /app
+    # Dependencies live in a Docker volume (not in the bind-mounted checkout) and
+    # are installed from the committed lockfile on every start, so the repo's own
+    # node_modules stays untouched and package changes are picked up.
+    command:
+      - sh
+      - -ec
+      - |
+        if [ ! -d node_modules/nodemon ]; then npm ci --no-audit --no-fund; fi
+        exec node_modules/.bin/nodemon --legacy-watch --delay 0.5 \
+          --watch . --ext js,json --ignore node_modules --ignore uploads server.js
+    ports:
+      - "3000:5000"
+    environment:
+      - PORT=5000
+      # Local MongoDB service. dotenv (server.js) never overrides an already-set
+      # env var, so this wins over the MongoDB Atlas URI committed in .env.
+      - MONGO_URI=mongodb://mongo:27017/xmonsters
+    volumes:
+      - .:/app
+      - api_node_modules:/app/node_modules
+    depends_on:
+      mongo:
+        condition: service_healthy
+    restart: on-failure
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:5000/api/videos >/dev/null || { echo 'api (GET /api/videos) failed'; exit 1; }"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    labels:
+      base44.project: "X Monsters API"
+      base44.kind: "api"
+      base44.port: "3000"
+
+volumes:
+  mongo_data:
+  api_node_modules:
